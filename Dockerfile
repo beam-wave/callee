@@ -17,8 +17,8 @@
 #
 # For finding packages in Debian, search on https://packages.debian.org/.
 
-ARG ELIXIR_VERSION=1.17.2
-ARG OTP_VERSION=27.1
+ARG ELIXIR_VERSION=1.17.3
+ARG OTP_VERSION=27.1.2
 ARG DEBIAN_VERSION=trixie-20260610-slim
 
 ARG BUILDER_IMAGE="docker.io/hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
