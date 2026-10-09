@@ -167,7 +167,8 @@ config :callee,
 
 s3_overrides =
   case System.get_env("S3_ENDPOINT", if(config_env() == :dev, do: "http://localhost:8333")) do
-    nil ->
+    # unset or blank = real AWS S3 (regional endpoint chosen by ExAws)
+    v when v in [nil, ""] ->
       []
 
     url ->
