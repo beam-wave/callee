@@ -1,5 +1,6 @@
 package com.clynyk.callee;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -10,6 +11,10 @@ import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.media.AudioAttributes;
 import android.media.RingtoneManager;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.os.PowerManager;
+import android.os.SystemClock;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
@@ -50,6 +55,10 @@ public class CallService extends Service {
 
     public static final String ACTION_DECLINE = "com.clynyk.callee.DECLINE";
     public static final String ACTION_STOP = "com.clynyk.callee.STOP";
+    public static final String ACTION_HEARTBEAT = "com.clynyk.callee.HEARTBEAT";
+    // Deep sleep (Doze) freezes normal timers, so keep the link alive with alarms
+    // that may fire while idle. The server allows 15 min without a heartbeat.
+    static final long ALARM_MS = 4 * 60 * 1000L;
 
     private static CallService instance;
 
@@ -64,6 +73,7 @@ public class CallService extends Service {
     private int backoff = 2;
     private boolean stopping = false;
     private String ringingCallId;
+    private ConnectivityManager.NetworkCallback netCallback;
 
     public static void start(Context ctx) {
         if (Session.load(ctx) == null) return;
@@ -88,6 +98,7 @@ public class CallService extends Service {
         super.onCreate();
         instance = this;
         createChannels(this);
+        watchNetwork();
     }
 
     @Override
@@ -113,8 +124,16 @@ public class CallService extends Service {
             return START_STICKY;
         }
 
+        if (intent != null && ACTION_HEARTBEAT.equals(intent.getAction())) {
+            wake(10_000);
+            if (ws == null) connect(); else send(ws, null, "phoenix", "heartbeat", new JSONObject());
+            scheduleAlarm();
+            return START_STICKY;
+        }
+
         stopping = false;
         if (ws == null) connect();
+        scheduleAlarm();
         return START_STICKY;
     }
 
@@ -122,6 +141,10 @@ public class CallService extends Service {
     public void onDestroy() {
         stopping = true;
         instance = null;
+        cancelAlarm();
+        if (netCallback != null) {
+            try { ((ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE)).unregisterNetworkCallback(netCallback); } catch (Exception ignored) {}
+        }
         if (ws != null) ws.close(1000, "bye");
         ws = null;
         super.onDestroy();
@@ -145,7 +168,7 @@ public class CallService extends Service {
                 Log.i(TAG, "connected " + topic);
             }
 
-            @Override public void onMessage(WebSocket socket, String text) { handle(text); }
+            @Override public void onMessage(WebSocket socket, String text) { wake(15_000); handle(text); }
 
             @Override public void onClosed(WebSocket socket, int code, String reason) { reconnect(); }
 
@@ -156,6 +179,51 @@ public class CallService extends Service {
                 reconnect();
             }
         });
+    }
+
+    // ---------------- keep-alive across deep sleep ----------------
+
+    private void scheduleAlarm() {
+        AlarmManager am = (AlarmManager) getSystemService(ALARM_SERVICE);
+        PendingIntent pi = heartbeatIntent(this);
+        long at = SystemClock.elapsedRealtime() + ALARM_MS;
+        // Fires even in Doze (at most every ~9 min there; more often when awake).
+        am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, at, pi);
+    }
+
+    private void cancelAlarm() {
+        ((AlarmManager) getSystemService(ALARM_SERVICE)).cancel(heartbeatIntent(this));
+    }
+
+    static PendingIntent heartbeatIntent(Context ctx) {
+        // Plain start: the service is already foreground, so this is allowed from the alarm.
+        Intent i = new Intent(ctx, CallService.class).setAction(ACTION_HEARTBEAT);
+        return PendingIntent.getService(ctx, 9, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    /** Keep the CPU up briefly (reconnect / show an incoming call). */
+    private void wake(long ms) {
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "callee:net");
+        wl.setReferenceCounted(false);
+        wl.acquire(ms);
+    }
+
+    /** Reconnect immediately when the network comes back or changes (Wi-Fi <-> mobile). */
+    private void watchNetwork() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        netCallback = new ConnectivityManager.NetworkCallback() {
+            @Override public void onAvailable(Network network) {
+                main.post(() -> {
+                    if (stopping) return;
+                    wake(10_000);
+                    if (ws != null) { ws.cancel(); ws = null; }
+                    backoff = 2;
+                    connect();
+                });
+            }
+        };
+        try { cm.registerDefaultNetworkCallback(netCallback); } catch (Exception ignored) {}
     }
 
     private final Runnable heartbeat = new Runnable() {
@@ -170,6 +238,7 @@ public class CallService extends Service {
         main.removeCallbacks(heartbeat);
         ws = null;
         if (stopping) return;
+        wake(5_000);
         int delay = backoff;
         backoff = Math.min(backoff * 2, 60);
         main.postDelayed(this::connect, delay * 1000L);

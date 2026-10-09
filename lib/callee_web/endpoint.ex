@@ -14,8 +14,10 @@ defmodule CalleeWeb.Endpoint do
     max_age: 400 * 86_400
   ]
 
+  # Generous timeout: the Android app's background service heartbeats via
+  # Doze-safe alarms (every few minutes while the phone sleeps).
   socket "/socket", CalleeWeb.UserSocket,
-    websocket: true,
+    websocket: [timeout: 15 * 60_000],
     longpoll: false
 
   socket "/live", Phoenix.LiveView.Socket,
