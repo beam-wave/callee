@@ -25,7 +25,10 @@ export function syncSession() {
       role: document.querySelector("meta[name='call-role']")?.content,
       uid: document.querySelector("meta[name='call-uid']")?.content,
     }).catch(() => {})
-  } else if (/\/(login|tenant\/login|admin\/login)$/.test(location.pathname)) {
-    n.clearSession().catch(() => {})
   }
 }
+
+// Only an explicit Sign out stops the app's background calling service.
+document.addEventListener("click", e => {
+  if (e.target.closest("a[href='/logout']")) native()?.clearSession().catch(() => {})
+}, true)

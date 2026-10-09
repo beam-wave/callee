@@ -48,8 +48,19 @@ defmodule CalleeWeb.Auth do
     if role && !user do
       conn |> clear_session() |> assign(:current_user, nil) |> assign(:current_role, nil)
     else
-      conn |> assign(:current_user, user) |> assign(:current_role, user && role)
+      conn
+      |> assign(:current_user, user)
+      |> assign(:current_role, user && role)
+      |> renew_daily(user)
     end
+  end
+
+  # Touch the session once a day so the persistent cookie's expiry keeps moving.
+  defp renew_daily(conn, nil), do: conn
+
+  defp renew_daily(conn, _user) do
+    today = Date.utc_today() |> Date.to_iso8601()
+    if get_session(conn, :seen) == today, do: conn, else: put_session(conn, :seen, today)
   end
 
   def require_role(conn, role) do
@@ -106,5 +117,5 @@ defmodule CalleeWeb.Auth do
   def socket_token(role, id), do: Phoenix.Token.sign(CalleeWeb.Endpoint, @salt, {role, id})
 
   def verify_socket_token(token),
-    do: Phoenix.Token.verify(CalleeWeb.Endpoint, @salt, token, max_age: 90 * 86_400)
+    do: Phoenix.Token.verify(CalleeWeb.Endpoint, @salt, token, max_age: 10 * 365 * 86_400)
 end

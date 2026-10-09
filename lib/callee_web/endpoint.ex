@@ -8,7 +8,10 @@ defmodule CalleeWeb.Endpoint do
     store: :cookie,
     key: "_callee_key",
     signing_salt: "luUzoYoo",
-    same_site: "Lax"
+    same_site: "Lax",
+    # Persistent login (also survives the Android app being killed). Browsers
+    # cap cookie lifetime at ~400 days; Auth.fetch_current renews it daily.
+    max_age: 400 * 86_400
   ]
 
   socket "/socket", CalleeWeb.UserSocket,

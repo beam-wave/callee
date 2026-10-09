@@ -35,6 +35,12 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
+    public void onStop() {
+        android.webkit.CookieManager.getInstance().flush();
+        super.onStop();
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
         visible = true;
@@ -44,6 +50,8 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onPause() {
         visible = false;
+        // Persist login cookies now; the process may be killed in the background.
+        android.webkit.CookieManager.getInstance().flush();
         super.onPause();
     }
 
