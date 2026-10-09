@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Callee</string>
+    <string name="title_activity_main">Callee</string>
+    <string name="package_name">com.clynyk.callee</string>
+    <string name="custom_url_scheme">com.clynyk.callee</string>
+</resources>

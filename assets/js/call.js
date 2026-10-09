@@ -2,7 +2,7 @@
 // (P2P when possible, relayed through coturn otherwise), tenant-side recording.
 import {Socket} from "phoenix"
 import {setVapidKey, setConnection, showCallNotification, closeNotifications} from "./pwa"
-import {prepareForCall, routeElement, setSpeaker, isSpeakerOn, canSwitch, releaseAfterCall} from "./audio_route"
+import {prepareForCall, routeElement, setSpeaker, isSpeakerOn, canSwitch, releaseAfterCall, reapply} from "./audio_route"
 
 const SPEAKER_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6"><path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 0 0 1.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06ZM18.584 5.106a.75.75 0 0 1 1.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 0 1-1.06-1.06 8.25 8.25 0 0 0 0-11.668.75.75 0 0 1 0-1.06Z"/><path d="M15.932 7.757a.75.75 0 0 1 1.061 0 6 6 0 0 1 0 8.486.75.75 0 0 1-1.06-1.061 4.5 4.5 0 0 0 0-6.364.75.75 0 0 1 0-1.06Z"/></svg>`
 
@@ -223,6 +223,13 @@ export class CallManager {
       return
     }
     const meCaller = active_call.caller.type === this.role
+    const launch = this.takeLaunchIntent()
+    if (launch && launch.id === active_call.call_id && launch.answer && !meCaller && !this.call &&
+        ["ringing", "missed", "declined", "left", "busy"].includes(active_call.status)) {
+      const others = active_call.kind === "group" ? {others: active_call.participants.length - 2, name: active_call.group_name} : null
+      this.onIncoming({call_id: active_call.call_id, from: active_call.caller_view, group: others, silent: true})
+      return this.accept()
+    }
     if (active_call.status === "ringing" && !meCaller && !this.call) {
       const others = active_call.kind === "group" ? {others: active_call.participants.length - 2} : null
       this.onIncoming({call_id: active_call.call_id, from: active_call.caller_view, group: others})
@@ -356,6 +363,15 @@ export class CallManager {
   }
 
   // ---------- incoming ----------
+  // Opened from the Android app's call notification: ?answer=<id> or ?call=<id>
+  takeLaunchIntent() {
+    const q = new URLSearchParams(location.search)
+    const id = q.get("answer") || q.get("call")
+    if (!id) return null
+    history.replaceState(null, "", location.pathname)
+    return {id, answer: q.has("answer")}
+  }
+
   onIncoming({call_id, from, group, silent}) {
     // A new call may arrive while the previous "Call ended" screen is still showing.
     if (this.call?.state === "ended") { clearTimeout(this.clearTimer); this.call = null }
@@ -478,6 +494,7 @@ export class CallManager {
       if (s === "connected") {
         if (this.call.state !== "active") {
           this.call.state = "active"; this.call.startedAt = Date.now(); this.startTimer()
+          reapply()
           if (this.call.group) this.startSpeakingMeter()
           if (this.role === "tenant" && this.browserRecords && !this.recorder && !this.call.group) {
             try { this.recorder = new CallRecorder(this.call.id, this.localStream, this.remoteStream) } catch (err) { console.error("recorder", err) }

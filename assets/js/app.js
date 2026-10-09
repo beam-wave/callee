@@ -26,6 +26,7 @@ import {hooks as colocatedHooks} from "phoenix-colocated/callee"
 import topbar from "../vendor/topbar"
 import {CallManager} from "./call"
 import {Hooks as PwaHooks, registerSW} from "./pwa"
+import {syncSession, isNative} from "./native"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
@@ -50,7 +51,8 @@ window.liveSocket = liveSocket
 
 // Start the call engine for tenants and clients (one per page load; the overlay
 // lives outside LiveView so it survives live navigation).
-registerSW()
+if (!isNative()) registerSW()
+syncSession()
 
 const callToken = document.querySelector("meta[name='call-token']")?.content
 if (callToken) {

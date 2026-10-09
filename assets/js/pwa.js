@@ -1,6 +1,8 @@
 // PWA plumbing: service worker, install prompt, Web Push subscription,
 // friendly banners, and LiveView hooks for the Settings page.
 
+import {isNative, native} from "./native"
+
 const store = {
   get(k) { try { return localStorage.getItem(k) } catch (_) { return null } },
   set(k, v) { try { localStorage.setItem(k, v) } catch (_) {} },
@@ -99,7 +101,7 @@ export async function closeNotifications(tag) {
 // ---------- Banner (one friendly nudge at a time) ----------
 function renderBanner() {
   const el = document.getElementById("pwa-banner")
-  if (!el) return
+  if (!el || isNative()) return
   let html = ""
   const st = pushState()
   if (st === "needs-install" && store.get("callee:dismiss:ios") !== "1") {
@@ -173,6 +175,7 @@ document.addEventListener("DOMContentLoaded", autoDismissFlashes)
 export const Hooks = {
   PushSettings: {
     mounted() {
+      if (isNative()) return this.mountNative()
       this.render = () => {
         const s = this.el.querySelector("[data-status]"), b = this.el.querySelector("[data-action]")
         const st = pushState()
@@ -189,11 +192,28 @@ export const Hooks = {
       this.el.querySelector("[data-action]").addEventListener("click", () => enablePush())
       listeners.add(this.render); this.render()
     },
-    destroyed() { listeners.delete(this.render) },
+    // Inside the Android app: calls ring via the app's background service.
+    async mountNative() {
+      const s = this.el.querySelector("[data-status]"), b = this.el.querySelector("[data-action]")
+      const n = native()
+      const st = await n.status().catch(() => ({}))
+      const issues = []
+      if (!st.notifications) issues.push("notifications are off")
+      if (!st.fullScreen) issues.push("full-screen call alerts are off")
+      if (!st.batteryUnrestricted) issues.push("battery saver may delay calls")
+      s.textContent = issues.length
+        ? `On, but ${issues.join(", ")}. Tap Fix for the most reliable ringing.`
+        : "On. The app rings even when closed or the phone is locked."
+      b.textContent = "Fix"
+      b.classList.toggle("hidden", !issues.length)
+      b.onclick = () => (!st.batteryUnrestricted ? n.openBatterySettings() : n.openNotificationSettings())
+    },
+    destroyed() { if (this.render) listeners.delete(this.render) },
   },
 
   InstallApp: {
     mounted() {
+      if (isNative()) { this.el.classList.add("hidden"); return }
       this.render = () => {
         const s = this.el.querySelector("[data-status]"), b = this.el.querySelector("[data-action]")
         if (isStandalone()) { this.el.classList.add("hidden"); return }

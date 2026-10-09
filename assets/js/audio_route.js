@@ -8,6 +8,8 @@
 //    whose label looks like an earpiece or speaker (only when the browser lists them).
 // If neither is available the speaker button stays hidden.
 
+import {native} from "./native"
+
 const PREF = "callee:speaker"
 const pref = {
   get() { try { return localStorage.getItem(PREF) === "1" } catch (_) { return false } },
@@ -32,7 +34,7 @@ async function discoverOutputs() {
 
 /** Can this device switch between earpiece and loudspeaker? */
 export function canSwitch() {
-  return hasAudioSession() || !!(outputs.earpiece && outputs.speaker)
+  return !!native() || hasAudioSession() || !!(outputs.earpiece && outputs.speaker)
 }
 
 export function isSpeakerOn() { return speakerOn }
@@ -58,6 +60,8 @@ function routeAll() {
 /** Call when the call's microphone is opened (device labels are visible then). */
 export async function prepareForCall() {
   speakerOn = pref.get()
+  const n = native()
+  if (n) { await n.startCallAudio({speaker: speakerOn}).catch(() => {}); return }
   applySession()
   await discoverOutputs()
   routeAll()
@@ -66,12 +70,18 @@ export async function prepareForCall() {
 export async function setSpeaker(on) {
   speakerOn = on
   pref.set(on)
+  const n = native()
+  if (n) { await n.setSpeaker({on}).catch(() => {}); return }
   applySession()
   routeAll()
 }
 
 /** Restore the browser default after a call so other media isn't affected. */
+/** Re-assert routing once media is flowing (Android WebView may reset it). */
+export function reapply() { native()?.reapplyAudio().catch(() => {}) }
+
 export function releaseAfterCall() {
+  native()?.stopCallAudio().catch(() => {})
   if (hasAudioSession()) { try { navigator.audioSession.type = "auto" } catch (_) {} }
 }
 

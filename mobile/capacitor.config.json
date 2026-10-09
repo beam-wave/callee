@@ -1,0 +1,16 @@
+{
+  "appId": "com.clynyk.callee",
+  "appName": "Callee",
+  "webDir": "www",
+  "server": {
+    "url": "https://clynyk.com",
+    "cleartext": false,
+    "androidScheme": "https",
+    "allowNavigation": ["clynyk.com", "www.clynyk.com"],
+    "errorPath": "index.html"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#4f46e5"
+  }
+}

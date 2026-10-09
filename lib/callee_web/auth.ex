@@ -74,6 +74,9 @@ defmodule CalleeWeb.Auth do
           _ -> home_path(role)
         end
 
+      # keep ?answer= / ?call= from the Android app's call notification
+      rest = conn.query_params |> Map.delete("tab") |> URI.encode_query()
+      to = if rest != "", do: to <> "?" <> rest, else: to
       conn |> redirect(to: to) |> halt()
     else
       conn
@@ -103,5 +106,5 @@ defmodule CalleeWeb.Auth do
   def socket_token(role, id), do: Phoenix.Token.sign(CalleeWeb.Endpoint, @salt, {role, id})
 
   def verify_socket_token(token),
-    do: Phoenix.Token.verify(CalleeWeb.Endpoint, @salt, token, max_age: 7 * 86_400)
+    do: Phoenix.Token.verify(CalleeWeb.Endpoint, @salt, token, max_age: 90 * 86_400)
 end
