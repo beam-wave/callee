@@ -231,4 +231,8 @@ mix test               # needs Postgres on localhost (PGPORT to override)
   grace period yet; ICE restarts handle short network changes while the tab stays up.
 - Recording is lost if the tenant's tab is closed before the upload finishes. The
   page warns on close while an upload is pending.
-- Phone speaker vs earpiece can't be controlled from a web page, especially on iOS.
+- **Earpiece vs loudspeaker:** calls start on the earpiece where the browser
+  allows it, and the call screen has a **Speaker** toggle that is remembered.
+  iPhone uses the Audio Session API (Safari 16.4+). Android and desktop use
+  `setSinkId` when the browser exposes earpiece/speaker outputs. Where neither is
+  available the toggle is hidden and the phone's default routing applies.

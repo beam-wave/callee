@@ -2,6 +2,9 @@
 // (P2P when possible, relayed through coturn otherwise), tenant-side recording.
 import {Socket} from "phoenix"
 import {setVapidKey, setConnection, showCallNotification, closeNotifications} from "./pwa"
+import {prepareForCall, routeElement, setSpeaker, isSpeakerOn, canSwitch, releaseAfterCall} from "./audio_route"
+
+const SPEAKER_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6"><path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 0 0 1.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06ZM18.584 5.106a.75.75 0 0 1 1.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 0 1-1.06-1.06 8.25 8.25 0 0 0 0-11.668.75.75 0 0 1 0-1.06Z"/><path d="M15.932 7.757a.75.75 0 0 1 1.061 0 6 6 0 0 1 0 8.486.75.75 0 0 1-1.06-1.061 4.5 4.5 0 0 0 0-6.364.75.75 0 0 1 0-1.06Z"/></svg>`
 
 const RING_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-7"><path fill-rule="evenodd" d="M1.5 4.5a3 3 0 0 1 3-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 0 1-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 0 0 6.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 0 1 1.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 0 1-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5Z" clip-rule="evenodd"/></svg>`
 const HANG_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-7 rotate-[135deg]"><path fill-rule="evenodd" d="M1.5 4.5a3 3 0 0 1 3-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 0 1-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 0 0 6.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 0 1 1.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 0 1-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5Z" clip-rule="evenodd"/></svg>`
@@ -443,7 +446,14 @@ export class CallManager {
       audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1},
       video: false,
     })
+    // Earpiece by default where the device allows it (user can switch to speaker).
+    await prepareForCall()
     return this.localStream
+  }
+
+  async toggleSpeaker() {
+    await setSpeaker(!isSpeakerOn())
+    this.render()
   }
 
   createPeer() {
@@ -526,6 +536,7 @@ export class CallManager {
 
   stopMedia() {
     clearInterval(this.timer)
+    releaseAfterCall()
     this.pc?.close(); this.pc = null
     this.localStream?.getTracks().forEach(t => t.stop()); this.localStream = null
     this.remoteStream = null; this.pendingIce = []
@@ -546,7 +557,7 @@ export class CallManager {
 
   audioEl() {
     let a = document.getElementById("call-audio")
-    if (!a) { a = document.createElement("audio"); a.id = "call-audio"; a.autoplay = true; a.setAttribute("playsinline", ""); document.body.appendChild(a) }
+    if (!a) { a = document.createElement("audio"); a.id = "call-audio"; a.autoplay = true; a.setAttribute("playsinline", ""); document.body.appendChild(a); routeElement(a) }
     return a
   }
 
@@ -569,7 +580,7 @@ export class CallManager {
   playGroupTrack(e) {
     const mid = e.transceiver?.mid
     let el = document.querySelector(`audio[data-group-mid="${mid}"]`)
-    if (!el) { el = document.createElement("audio"); el.autoplay = true; el.setAttribute("playsinline", ""); el.dataset.groupMid = mid; document.body.appendChild(el) }
+    if (!el) { el = document.createElement("audio"); el.autoplay = true; el.setAttribute("playsinline", ""); el.dataset.groupMid = mid; document.body.appendChild(el); routeElement(el) }
     el.srcObject = new MediaStream([e.track])
     el.play().catch(() => {})
     // Level meter per receive line (RTP audio-level extensions aren't negotiated).
@@ -672,7 +683,7 @@ export class CallManager {
                 btn("accept", "Accept", "bg-emerald-500 hover:bg-emerald-600 text-white", RING_ICON, "animate-bounce")
     } else if (c.state !== "ended") {
       const mute = c.state === "active"
-        ? btn("mute", c.muted ? "Unmute" : "Mute", c.muted ? "bg-white text-gray-900" : "bg-white/15 hover:bg-white/25 text-white", MIC_ICON)
+        ? btn("mute", c.muted ? "Unmute" : "Mute", c.muted ? "bg-white text-gray-900" : "bg-white/15 hover:bg-white/25 text-white", MIC_ICON) + speakerBtn(btn)
         : ""
       buttons = mute + btn("hangup", "End", "bg-red-500 hover:bg-red-600 text-white", HANG_ICON)
     }
@@ -698,10 +709,15 @@ export class CallManager {
         </div>
       </div>`
     this.root.querySelectorAll("[data-act]").forEach(b => b.addEventListener("click", () => {
-      ({accept: () => this.accept(), reject: () => this.reject(), hangup: () => this.hangup(), mute: () => this.toggleMute()})[b.dataset.act]()
+      ({accept: () => this.accept(), reject: () => this.reject(), hangup: () => this.hangup(), mute: () => this.toggleMute(), speaker: () => this.toggleSpeaker()})[b.dataset.act]()
     }))
   }
 }
+
+// Speaker toggle, only where the device lets us switch output.
+const speakerBtn = btn => canSwitch()
+  ? btn("speaker", "Speaker", isSpeakerOn() ? "bg-white text-gray-900" : "bg-white/15 hover:bg-white/25 text-white", SPEAKER_ICON)
+  : ""
 
 const fmt = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`
 
@@ -722,7 +738,7 @@ CallManager.prototype.renderGroup = function () {
        <button data-act="${act}" class="btn btn-circle size-[72px] border-0 shadow-lg active:scale-95 transition ${cls}" aria-label="${label}">${icon}</button>
        <span class="text-sm text-white/80">${label}</span></div>`
   const buttons = c.state === "ended" ? "" :
-    (c.state === "active" ? btn("mute", c.muted ? "Unmute" : "Mute", c.muted ? "bg-white text-gray-900" : "bg-white/15 hover:bg-white/25 text-white", MIC_ICON) : "") +
+    (c.state === "active" ? btn("mute", c.muted ? "Unmute" : "Mute", c.muted ? "bg-white text-gray-900" : "bg-white/15 hover:bg-white/25 text-white", MIC_ICON) + speakerBtn(btn) : "") +
     btn("hangup", g.host ? "End for all" : "Leave", "bg-red-500 hover:bg-red-600 text-white", HANG_ICON)
   this.root.innerHTML = `
     <div class="fixed inset-0 z-50 sm:bg-black/50 sm:backdrop-blur-sm sm:flex sm:items-center sm:justify-center" role="dialog" aria-modal="true" aria-label="Group call">
@@ -740,7 +756,7 @@ CallManager.prototype.renderGroup = function () {
     </div>`
   this.renderGrid()
   this.root.querySelectorAll("[data-act]").forEach(b => b.addEventListener("click", () => {
-    ({hangup: () => this.hangup(), mute: () => this.toggleMute()})[b.dataset.act]()
+    ({hangup: () => this.hangup(), mute: () => this.toggleMute(), speaker: () => this.toggleSpeaker()})[b.dataset.act]()
   }))
 }
 
