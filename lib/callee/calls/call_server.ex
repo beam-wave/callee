@@ -100,12 +100,8 @@ defmodule Callee.Calls.CallServer do
 
       server = self()
 
-      Task.Supervisor.start_child(Callee.TaskSupervisor, fn ->
-        case Push.notify_incoming(callee, incoming) do
-          {:ok, n} when n > 0 -> send(server, :reached)
-          _ -> :ok
-        end
-      end)
+      push_ring(server, callee, incoming)
+      Process.send_after(self(), :repush, repush_ms())
 
       {:ok, state}
     else
@@ -259,6 +255,15 @@ defmodule Callee.Calls.CallServer do
   @impl true
   def handle_info(:reached, s), do: {:noreply, reached(s)}
 
+  # Phones in the background only hear about calls via Web Push, and a single
+  # notification is easy to miss. Re-alert every few seconds while ringing,
+  # like a phone ring (same tag, so it replaces rather than stacks).
+  def handle_info(:repush, %{status: :ringing} = s) do
+    push_ring(self(), s.callee, incoming_payload(s))
+    Process.send_after(self(), :repush, repush_ms())
+    {:noreply, s}
+  end
+
   def handle_info(:ring_timeout, %{status: :ringing} = s),
     do: finish(s, "missed", "no_answer")
 
@@ -327,6 +332,17 @@ defmodule Callee.Calls.CallServer do
         Process.cancel_timer(t)
         update_in(s, [:grace], &Map.delete(&1, role))
     end
+  end
+
+  defp repush_ms, do: Application.get_env(:callee, :repush_ms, 10_000)
+
+  defp push_ring(server, callee, payload) do
+    Task.Supervisor.start_child(Callee.TaskSupervisor, fn ->
+      case Push.notify_incoming(callee, payload) do
+        {:ok, n} when n > 0 -> send(server, :reached)
+        _ -> :ok
+      end
+    end)
   end
 
   defp role(s, party), do: if(party == s.caller, do: "caller", else: "callee")

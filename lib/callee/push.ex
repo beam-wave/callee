@@ -201,7 +201,7 @@ defmodule Callee.Push do
     env_pub = Application.get_env(:callee, :vapid_public_key)
     env_priv = Application.get_env(:callee, :vapid_private_key)
 
-    if env_pub && env_priv do
+    if is_binary(env_pub) and env_pub != "" and is_binary(env_priv) and env_priv != "" do
       {env_pub, env_priv}
     else
       case {Callee.Settings.get("vapid_public"), Callee.Settings.get("vapid_private")} do

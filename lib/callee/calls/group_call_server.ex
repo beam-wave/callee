@@ -135,6 +135,7 @@ defmodule Callee.Calls.GroupCallServer do
           }
 
           for {cid, %{status: "ringing"}} <- parts, do: ring(s, cid)
+          Process.send_after(self(), :repush, Application.get_env(:callee, :repush_ms, 10_000))
           for {cid, %{status: "busy"}} <- parts, do: announce_live(s, cid)
           broadcast_roster(s)
           {:ok, touch_idle(s)}
@@ -284,6 +285,31 @@ defmodule Callee.Calls.GroupCallServer do
   end
 
   def handle_info(:max_duration, s), do: end_call(s, "completed", "max_duration")
+
+  # Keep alerting people whose phones are still ringing (see CallServer).
+  def handle_info(:repush, s) do
+    ringing = for {cid, %{status: "ringing"}} <- s.parts, do: cid
+
+    for cid <- ringing do
+      payload = %{
+        call_id: s.call.id,
+        from: s.host_view,
+        group: %{others: map_size(s.parts) - 1, name: s.group_name}
+      }
+
+      label = s.group_name || "group call"
+
+      Task.Supervisor.start_child(Callee.TaskSupervisor, fn ->
+        Push.notify_incoming({:client, cid}, %{
+          payload
+          | from: %{s.host_view | name: "#{s.host_view.name} (#{label})"}
+        })
+      end)
+    end
+
+    Process.send_after(self(), :repush, Application.get_env(:callee, :repush_ms, 10_000))
+    {:noreply, s}
+  end
 
   # Host alone (nobody joined) for GROUP_IDLE_MINUTES.
   def handle_info(:idle, s) do

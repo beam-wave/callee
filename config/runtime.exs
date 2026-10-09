@@ -161,8 +161,17 @@ config :callee,
        "" -> nil
        v -> v
      end),
-  vapid_public_key: System.get_env("VAPID_PUBLIC_KEY"),
-  vapid_private_key: System.get_env("VAPID_PRIVATE_KEY"),
+  # Blank (as docker compose passes unset vars) = generate and store in the DB.
+  vapid_public_key:
+    (case System.get_env("VAPID_PUBLIC_KEY") do
+       "" -> nil
+       v -> v
+     end),
+  vapid_private_key:
+    (case System.get_env("VAPID_PRIVATE_KEY") do
+       "" -> nil
+       v -> v
+     end),
   vapid_subject: System.get_env("VAPID_SUBJECT", "mailto:admin@example.com")
 
 s3_overrides =
