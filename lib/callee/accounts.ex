@@ -33,7 +33,9 @@ defmodule Callee.Accounts do
   def ensure_admin!(username, password) do
     case Repo.get_by(Admin, username: username) do
       nil ->
-        %Admin{} |> Admin.changeset(%{username: username, password: password}) |> Repo.insert!()
+        %Admin{}
+        |> Admin.changeset(%{username: username, password: password}, min_password: 1)
+        |> Repo.insert!()
 
       a ->
         a

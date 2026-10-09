@@ -148,8 +148,15 @@ config :callee,
   # UDP ports the server media engine uses for ICE host candidates (server mode).
   media_port_range: System.get_env("MEDIA_PORT_RANGE", "50000-50100"),
   s3_bucket: System.get_env("S3_BUCKET", "callee-recordings"),
+  # Blank = S3 is internal-only; recordings are streamed through the app.
   s3_public_endpoint:
-    System.get_env("S3_PUBLIC_ENDPOINT", if(config_env() == :dev, do: "http://localhost:8333")),
+    (case System.get_env(
+            "S3_PUBLIC_ENDPOINT",
+            if(config_env() == :dev, do: "http://localhost:8333")
+          ) do
+       "" -> nil
+       v -> v
+     end),
   vapid_public_key: System.get_env("VAPID_PUBLIC_KEY"),
   vapid_private_key: System.get_env("VAPID_PRIVATE_KEY"),
   vapid_subject: System.get_env("VAPID_SUBJECT", "mailto:admin@example.com")
