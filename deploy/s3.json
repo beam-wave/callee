@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "callee",
+      "credentials": [{"accessKey": "calleeaccess", "secretKey": "calleesecret"}],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

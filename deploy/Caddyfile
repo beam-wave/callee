@@ -1,0 +1,11 @@
+# TLS front for production (docker compose --profile tls up -d).
+# Browsers only allow microphone access on HTTPS (or localhost).
+{$APP_DOMAIN} {
+	encode gzip
+	reverse_proxy app:4000
+}
+
+# Recordings are fetched by the browser via short-lived presigned URLs.
+{$S3_DOMAIN} {
+	reverse_proxy s3:8333
+}

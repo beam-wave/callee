@@ -1,0 +1,133 @@
+# Callee: one-to-one audio calling.
+#   cp .env.example .env && docker compose up -d --build
+#   open http://localhost:4000/admin/login
+name: callee
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: callee
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-callee}
+      POSTGRES_DB: callee
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U callee"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  s3:
+    # S3-compatible object store (SeaweedFS). Swap for AWS S3 by removing this
+    # service and S3_ENDPOINT / S3_PUBLIC_ENDPOINT from .env.
+    image: chrislusf/seaweedfs:latest
+    restart: unless-stopped
+    command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -master.volumeSizeLimitMB=1024 -volume.max=0
+    ports:
+      - "8333:8333"   # S3 API (browser loads recordings via presigned URLs)
+    volumes:
+      - s3data:/data
+      - ./deploy/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8333/healthz || wget -q -S -O /dev/null http://127.0.0.1:8333/ 2>&1 | grep -q HTTP"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  coturn:
+    image: coturn/coturn:4.6
+    restart: unless-stopped
+    command:
+      - -c
+      - /etc/coturn/turnserver.conf
+      - --static-auth-secret=${TURN_SECRET:-dev-turn-secret-change-me}
+      - --external-ip=${TURN_EXTERNAL_IP:-127.0.0.1}
+    volumes:
+      - ./deploy/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    networks: [default]
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "49160-49250:49160-49250/udp"
+    # On a Linux VPS, `network_mode: host` is faster for UDP relaying:
+    # network_mode: host
+
+  app:
+    build: .
+    image: callee:latest
+    restart: unless-stopped
+    depends_on:
+      db: {condition: service_healthy}
+      s3: {condition: service_healthy}
+    ports:
+      - "4000:4000"
+      # Server-mode media (WebRTC host candidates). Browsers that can't reach
+      # these directly still connect through coturn, which relays to the app.
+      - "50000-50100:50000-50100/udp"
+    volumes:
+      - recordings:/data/recordings
+    environment:
+      # ---- recording / media ----
+      RECORDING_MODE: ${RECORDING_MODE:-server}   # server | client | off
+      RECORDING_DIR: /data/recordings
+      MEDIA_PORT_RANGE: ${MEDIA_PORT_RANGE:-50000-50100}
+      MAX_CALL_HOURS: ${MAX_CALL_HOURS:-8}
+      GROUP_MAX: ${GROUP_MAX:-50}
+      SPEAKER_SLOTS: ${SPEAKER_SLOTS:-4}
+      GROUP_IDLE_MINUTES: ${GROUP_IDLE_MINUTES:-10}
+      DATABASE_URL: ecto://callee:${POSTGRES_PASSWORD:-callee}@db/callee
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?set SECRET_KEY_BASE in .env}
+      PHX_HOST: ${PHX_HOST:-localhost}
+      PHX_URL_SCHEME: ${PHX_URL_SCHEME:-http}
+      PHX_URL_PORT: ${PHX_URL_PORT:-4000}
+      PORT: "4000"
+      PHX_SERVER: "true"
+      # Allowed browser origins for the websocket (comma list, or "false").
+      CHECK_ORIGIN: ${CHECK_ORIGIN:-//localhost,//127.0.0.1,//*.localhost}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      # S3 (SeaweedFS here; for AWS S3 drop S3_ENDPOINT/S3_PUBLIC_ENDPOINT)
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-calleeaccess}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-calleesecret}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-callee-recordings}
+      S3_ENDPOINT: ${S3_ENDPOINT-http://s3:8333}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT-http://localhost:8333}
+      # TURN / STUN as reachable by browsers
+      TURN_SECRET: ${TURN_SECRET:-dev-turn-secret-change-me}
+      STUN_URLS: ${STUN_URLS:-stun:localhost:3478}
+      TURN_URLS: ${TURN_URLS:-turn:localhost:3478?transport=udp,turn:localhost:3478?transport=tcp}
+      # Web Push (optional; generated + stored in DB when empty)
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["tls"]
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-}
+      S3_DOMAIN: ${S3_DOMAIN:-}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+
+networks:
+  default:
+    ipam:
+      # Fixed subnet so coturn can be allowed to relay to the app (server-mode media).
+      config: [{subnet: 172.30.0.0/24}]
+
+volumes:
+  recordings:
+  pgdata:
+  s3data:
+  caddy_data:

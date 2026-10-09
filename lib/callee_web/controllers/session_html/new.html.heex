@@ -1,0 +1,70 @@
+<div class="min-h-dvh flex flex-col items-center justify-center px-4 py-10 bg-gradient-to-br from-primary/10 via-base-200 to-secondary/10">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-6">
+      <img src={~p"/images/icon.svg"} class="size-16 mx-auto rounded-2xl shadow-lg" alt="" />
+      <h1 class="text-3xl font-bold mt-4">{@title}</h1>
+      <p class="text-base-content/60 mt-1">
+        <%= case @role do %>
+          <% "client" -> %>
+            Sign in with the mobile number you were given.
+          <% "tenant" -> %>
+            Manage your contacts, calls and recordings.
+          <% "admin" -> %>
+            Manage tenant accounts.
+        <% end %>
+      </p>
+    </div>
+
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body">
+        <.form for={@form} action={@action} id="login-form" class="space-y-1">
+          <.input
+            field={@form[:id]}
+            type={@id_type}
+            label={@id_label}
+            required
+            autofocus
+            autocomplete="username"
+            autocapitalize="none"
+            inputmode={if @role == "client", do: "tel"}
+            placeholder={if @role == "client", do: "+91 98765 43210", else: "username"}
+          />
+          <div class="relative">
+            <.input
+              field={@form[:password]}
+              type="password"
+              label="Password"
+              required
+              autocomplete="current-password"
+              id="login-password"
+            />
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs absolute right-2 top-8"
+              onclick="const i=document.getElementById('login-password');i.type=i.type==='password'?'text':'password';this.textContent=i.type==='password'?'Show':'Hide'"
+            >
+              Show
+            </button>
+          </div>
+          <.button class="btn btn-primary btn-block btn-lg mt-3" phx-disable-with="Signing in…">
+            Sign in
+          </.button>
+        </.form>
+        <p :if={@role == "client"} class="text-xs text-center text-base-content/50 mt-2">
+          Forgot your password? Ask whoever added you to reset it.
+        </p>
+      </div>
+    </div>
+
+    <div class="flex justify-center gap-4 text-sm mt-6 text-base-content/60">
+      <.link :if={@role != "client"} href={~p"/login"} class="link link-hover">
+        Client sign in
+      </.link>
+      <.link :if={@role != "tenant"} href={~p"/tenant/login"} class="link link-hover">
+        Tenant sign in
+      </.link>
+      <.link :if={@role != "admin"} href={~p"/admin/login"} class="link link-hover">Admin</.link>
+    </div>
+  </div>
+  <.flash_group flash={@flash} />
+</div>

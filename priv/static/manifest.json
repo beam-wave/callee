@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "Callee: voice calls",
+  "short_name": "Callee",
+  "description": "Simple, private voice calls with the people you work with.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#f5f5f7",
+  "theme_color": "#6366f1",
+  "categories": ["communication", "business"],
+  "icons": [
+    {"src": "/images/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "/images/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "/images/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+    {"src": "/images/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+    {"src": "/images/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}
+  ],
+  "shortcuts": [
+    {"name": "Contacts", "url": "/?tab=contacts", "icons": [{"src": "/images/icon-192.png", "sizes": "192x192"}]},
+    {"name": "Recent calls", "url": "/?tab=calls", "icons": [{"src": "/images/icon-192.png", "sizes": "192x192"}]}
+  ]
+}
