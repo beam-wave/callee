@@ -170,6 +170,10 @@ defmodule Callee.Calls.CallServer do
       browser_records: Callee.Recording.browser_records?()
     }
 
+    Task.Supervisor.start_child(Callee.TaskSupervisor, fn ->
+      Push.notify_cancel(s.callee, call.id)
+    end)
+
     broadcast(s.caller, "call:accepted", payload)
     broadcast(s.callee, "call:accepted", payload)
     {:reply, {:ok, payload}, s}
@@ -295,6 +299,13 @@ defmodule Callee.Calls.CallServer do
 
   defp finish(s, status, reason, reply \\ nil) do
     {:ok, call} = Calls.finish(s.call, status, reason)
+
+    if s.status == :ringing do
+      Task.Supervisor.start_child(Callee.TaskSupervisor, fn ->
+        Push.notify_cancel(s.callee, call.id)
+      end)
+    end
+
     if s.status == :active, do: Callee.Recording.on_end(call)
     payload = %{call_id: call.id, status: status, reason: reason, duration: call.duration_seconds}
     broadcast(s.caller, "call:ended", payload)

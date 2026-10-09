@@ -36,6 +36,16 @@
                 android:value="Receive incoming VoIP calls: keeps a signalling connection so the phone rings when called" />
         </service>
 
+        <service
+            android:name=".CalleeMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <receiver android:name=".DeclineReceiver" android:exported="false" />
+
         <receiver
             android:name=".BootReceiver"
             android:exported="true">

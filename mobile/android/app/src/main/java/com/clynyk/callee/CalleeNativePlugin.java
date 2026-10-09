@@ -25,6 +25,7 @@ public class CalleeNativePlugin extends Plugin {
                 call.getString("role"), call.getString("uid"));
         CallService.stop(ctx);   // reconnect with the fresh token
         CallService.start(ctx);
+        Fcm.registerCurrent(ctx);
         call.resolve();
     }
 

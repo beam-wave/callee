@@ -56,7 +56,31 @@ defmodule Callee.Push do
 
   ## Notifications
 
-  def notify_incoming(party, %{call_id: id, from: from}) do
+  @doc "Tell the Android app a call ended/was answered elsewhere so it stops ringing."
+  def notify_cancel(party, call_id) do
+    Callee.FCM.send_to(party, %{type: "call_cancel", call_id: call_id}, ttl: 60)
+  end
+
+  def notify_incoming(party, %{call_id: id, from: from} = payload) do
+    label =
+      case payload[:group] do
+        %{name: n} when is_binary(n) and n != "" -> n
+        %{} -> "Group call"
+        _ -> "Audio call"
+      end
+
+    {:ok, n_fcm} =
+      Callee.FCM.send_to(
+        party,
+        %{type: "incoming_call", call_id: id, name: from.name, label: label},
+        ttl: 45
+      )
+
+    {:ok, n_web} = do_notify_incoming(party, id, from)
+    {:ok, n_fcm + n_web}
+  end
+
+  defp do_notify_incoming(party, id, from) do
     send_to(
       party,
       %{

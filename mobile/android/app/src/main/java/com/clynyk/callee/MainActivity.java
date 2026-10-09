@@ -25,6 +25,7 @@ public class MainActivity extends BridgeActivity {
         askPermissions();
         handleCallIntent(getIntent());
         CallService.start(this);
+        Fcm.registerCurrent(this);
     }
 
     @Override

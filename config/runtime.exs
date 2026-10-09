@@ -172,7 +172,9 @@ config :callee,
        "" -> nil
        v -> v
      end),
-  vapid_subject: System.get_env("VAPID_SUBJECT", "mailto:admin@example.com")
+  vapid_subject: System.get_env("VAPID_SUBJECT", "mailto:admin@example.com"),
+  # Firebase service-account JSON (file path, raw JSON or base64). Blank = FCM off.
+  fcm_service_account: System.get_env("FCM_SERVICE_ACCOUNT")
 
 s3_overrides =
   case System.get_env("S3_ENDPOINT", if(config_env() == :dev, do: "http://localhost:8333")) do

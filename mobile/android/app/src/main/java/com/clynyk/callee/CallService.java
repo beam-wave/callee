@@ -87,7 +87,7 @@ public class CallService extends Service {
 
     /** Called when the app UI comes to the foreground / takes the call. */
     public static void cancelRinging(Context ctx) {
-        ((NotificationManager) ctx.getSystemService(NOTIFICATION_SERVICE)).cancel(ID_CALL);
+        IncomingCall.cancel(ctx, null);
         if (instance != null) instance.ringingCallId = null;
     }
 
@@ -293,29 +293,7 @@ public class CallService extends Service {
 
     private void showIncoming(String callId, String name, String label) {
         ringingCallId = callId;
-        Person caller = new Person.Builder().setName(name).setImportant(true).build();
-
-        Intent decline = new Intent(this, CallService.class).setAction(ACTION_DECLINE).putExtra("call_id", callId);
-        PendingIntent declinePi = PendingIntent.getService(this, 2, decline,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        PendingIntent answerPi = openApp(this, callId, true);
-        PendingIntent fullScreen = openApp(this, callId, false);
-
-        Notification n = new NotificationCompat.Builder(this, CH_CALLS)
-                .setSmallIcon(R.drawable.ic_stat_call)
-                .setContentTitle(name)
-                .setContentText(label)
-                .setCategory(NotificationCompat.CATEGORY_CALL)
-                .setPriority(NotificationCompat.PRIORITY_MAX)
-                .setOngoing(true)
-                .setAutoCancel(true)
-                .setTimeoutAfter(50_000)
-                .setFullScreenIntent(fullScreen, true)
-                .setContentIntent(fullScreen)
-                .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, declinePi, answerPi))
-                .build();
-        n.flags |= Notification.FLAG_INSISTENT; // keep ringing until handled
-        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(ID_CALL, n);
+        IncomingCall.show(this, callId, name, label);
     }
 
     static PendingIntent openApp(Context ctx, String callId, boolean answer) {

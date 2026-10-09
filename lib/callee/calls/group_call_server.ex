@@ -379,6 +379,11 @@ defmodule Callee.Calls.GroupCallServer do
   # ringing participant -> declined / missed
   defp resolve(s, cid, status) do
     Logger.info("group call #{s.call.id}: client #{cid} #{status}")
+
+    Task.Supervisor.start_child(Callee.TaskSupervisor, fn ->
+      Push.notify_cancel({:client, cid}, s.call.id)
+    end)
+
     p = s.parts[cid]
     if p.timer, do: Process.cancel_timer(p.timer)
     Registry.unregister_match(@registry, {:party, {:client, cid}}, :participant)
@@ -469,6 +474,12 @@ defmodule Callee.Calls.GroupCallServer do
     broadcast(s.host, "call:ended", payload)
 
     for {cid, p} <- s.parts do
+      if p.status == "ringing",
+        do:
+          Task.Supervisor.start_child(Callee.TaskSupervisor, fn ->
+            Push.notify_cancel({:client, cid}, call.id)
+          end)
+
       if p.status in ["ringing", "joined"], do: broadcast({:client, cid}, "call:ended", payload)
       broadcast({:client, cid}, "group:gone", %{call_id: call.id})
     end

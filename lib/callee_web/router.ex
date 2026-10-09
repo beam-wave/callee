@@ -12,6 +12,10 @@ defmodule CalleeWeb.Router do
     plug :fetch_current
   end
 
+  pipeline :api do
+    plug :accepts, ["json"]
+  end
+
   pipeline :guest, do: plug(:redirect_if_signed_in)
   pipeline :admin, do: plug(:require_role, "admin")
   pipeline :tenant, do: plug(:require_role, "tenant")
@@ -72,6 +76,14 @@ defmodule CalleeWeb.Router do
       live "/calls", ClientCallsLive
       live "/settings", SettingsLive
     end
+  end
+
+  # Native app (Android) API — bearer token auth inside the controller
+  scope "/api", CalleeWeb do
+    pipe_through :api
+    post "/devices", DeviceApiController, :register
+    delete "/devices", DeviceApiController, :unregister
+    post "/calls/:id/reject", DeviceApiController, :reject
   end
 
   scope "/push", CalleeWeb do
