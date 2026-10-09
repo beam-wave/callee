@@ -148,6 +148,10 @@ config :callee,
   # UDP ports the server media engine uses for ICE host candidates (server mode).
   media_port_range: System.get_env("MEDIA_PORT_RANGE", "50000-50100"),
   s3_bucket: System.get_env("S3_BUCKET", "callee-recordings"),
+  # Optional key prefix when sharing a bucket with other apps, e.g. "callee".
+  s3_prefix: System.get_env("S3_PREFIX"),
+  # Skip creating/checking the bucket at boot (keys without ListBucket/CreateBucket).
+  skip_bucket_check: System.get_env("SKIP_BUCKET_CHECK") in ~w(1 true) or config_env() == :test,
   # Blank = S3 is internal-only; recordings are streamed through the app.
   s3_public_endpoint:
     (case System.get_env(

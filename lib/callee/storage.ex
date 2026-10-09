@@ -4,6 +4,14 @@ defmodule Callee.Storage do
 
   def bucket, do: Application.fetch_env!(:callee, :s3_bucket)
 
+  @doc "Object key under the optional S3_PREFIX (for sharing a bucket)."
+  def key(path) do
+    case Application.get_env(:callee, :s3_prefix) do
+      p when p in [nil, ""] -> path
+      p -> String.trim_trailing(p, "/") <> "/" <> path
+    end
+  end
+
   def ensure_bucket do
     case ExAws.S3.head_bucket(bucket()) |> ExAws.request() do
       {:ok, _} ->

@@ -9,7 +9,7 @@ defmodule Callee.Calls.RecordingProcessor do
 
   def process(recording, src_path, src_type) do
     {path, type, ext} = convert(src_path, src_type)
-    key = "recordings/tenant-#{recording.tenant_id}/#{recording.call_id}.#{ext}"
+    key = Storage.key("recordings/tenant-#{recording.tenant_id}/#{recording.call_id}.#{ext}")
 
     case Storage.upload_file(path, key, type) do
       {:ok, _} ->
@@ -83,7 +83,7 @@ defmodule Callee.Calls.RecordingProcessor do
   end
 
   defp upload(rec, path, type, ext) do
-    key = "recordings/tenant-#{rec.tenant_id}/#{rec.call_id}.#{ext}"
+    key = Storage.key("recordings/tenant-#{rec.tenant_id}/#{rec.call_id}.#{ext}")
 
     case Storage.upload_file(path, key, type) do
       {:ok, _} ->
